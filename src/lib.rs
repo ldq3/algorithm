@@ -1,4 +1,24 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::{collections::{BinaryHeap, HashMap}, i32};
+
+struct Edge {
+    from: usize,
+    to: usize,
+    weight: f32,
+}
+
+// #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+// enum Dist {
+//     Finite(i32),
+//     NegInf,
+//     PosInf,
+// }
+
+// Bellman-Ford result
+#[derive(Debug)]
+enum BFRes {
+    NegCycle(Vec<f32>),
+    NoNegCycle(Vec<f32>),
+}
 
 // The record which will be stored in heap.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -57,12 +77,41 @@ fn dijkstra(adj_list: &HashMap<usize, Vec<(usize, usize)>>, start: usize) -> Has
     distances
 }
 
+fn bellman_ford(graph: &Vec<Edge>, source: usize, n: usize) -> BFRes {
+    let mut dist = vec![f32::INFINITY; n];
+    dist[source] = 0.0;
+
+    // 松弛操作 n-1 次
+    for _ in 0..n - 1 {
+        for edge in graph {
+            if dist[edge.from] + edge.weight < dist[edge.to] {
+                dist[edge.to] = dist[edge.from] + edge.weight;
+            }
+        }
+    }
+
+    // 检测负权重循环
+    for _ in 0..n - 1 {
+        for edge in graph {
+            if dist[edge.from] + edge.weight < dist[edge.to] {
+                dist[edge.to] = f32::NEG_INFINITY;
+            }
+        }
+    }
+
+    if dist.contains(&f32::NEG_INFINITY) {
+        BFRes::NegCycle(dist)
+    } else {
+        BFRes::NoNegCycle(dist)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn dijkstra_1() {
+    fn dijkstra_0() {
         let mut graph = HashMap::new();
         graph.insert(0, vec![(1, 10), (2, 1)]);
         graph.insert(1, vec![(3, 2)]);
@@ -75,5 +124,20 @@ mod tests {
         for (node, distance) in distances.iter() {
             println!("Distance from 0 to {}: {:?}", node, distance);
         }
+    }
+
+    #[test]
+    fn bellman_ford_0() {
+        let graph = vec![
+            Edge { from: 0, to: 1, weight: 10.0 },
+            Edge { from: 0, to: 2, weight: 1.0 },
+            Edge { from: 1, to: 3, weight: 2.0 },
+            Edge { from: 2, to: 1, weight: 3.0 },
+            Edge { from: 2, to: 4, weight: 2.0 },
+            Edge { from: 3, to: 0, weight: 7.0 },
+            Edge { from: 4, to: 3, weight: 6.0 },
+        ];
+        let res = bellman_ford(&graph, 0, 5);
+        println!("{:?}", res);
     }
 }
