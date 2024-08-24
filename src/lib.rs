@@ -1,6 +1,5 @@
+mod data_structure;
 mod sort;
-mod graph;
-mod search_tree;
 
 // bin_search and fib_search are for ordered data
 pub fn bin_search(numbers: &[i32], target: i32) -> Option<usize> {
