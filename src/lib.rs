@@ -1,5 +1,7 @@
 mod data_structure;
+mod classical;
 mod sort;
+mod evaluate;
 
 // bin_search and fib_search are for ordered data
 pub fn bin_search(numbers: &[i32], target: i32) -> Option<usize> {

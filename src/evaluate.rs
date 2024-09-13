@@ -8,18 +8,20 @@ enum Operator {
     Div,
 }
 
+#[derive(PartialEq)]
 enum Associativity {
     Left,
     Right,
 }
 
+#[derive(PartialEq)]
 enum Arity {
     Unary,
     Binary,
 }
 
 impl Operator {
-    fn attri(self) -> (usize, Associativity, Arity) {
+    fn attri(&self) -> (usize, Associativity, Arity) {
         match self {
             Operator::Add => (1, Associativity::Left, Arity::Binary),
             Operator::Sub => (1, Associativity::Left, Arity::Binary),
@@ -37,77 +39,103 @@ enum Elem {
 }
 
 enum SymbolStackElem {
-    Lp, // left parenthesis
+    LP, // left parenthesis
     Op(Operator),
 }
 
 fn evaluate(expression: String) -> Result<i32, ()> { 
-    let s_iter = s.chars().peekable();
+    let mut s_iter = expression.chars().peekable();
 
-    let parser = || -> Elem {
+    let mut parser = || -> Result<Elem, ()> {
         if let Some(c) = s_iter.next() {
             let mut num_str = String::new();
             if c.is_numeric() {
                 num_str.push(c);
                 while s_iter.peek().unwrap().is_numeric() {
-                    let c = s_iter.next();
+                    let c = s_iter.next().unwrap();
                     num_str.push(c);
                 }
-                return elem = Elem::Num(num_str.parse());
+                return Ok(Elem::Num(num_str.parse().unwrap()));
             }
 
             match c {
-                '(' => return Elem::Op(OpStackElem::LP),
-                ')' => return Elem::RP,
-                '+' => return Elem::Op(OpStackElem::Op(Operator::Add)),
-                '-' => return Elem::Op(OpStackElem::Op(Operator::Sub)),
-                '*' => return Elem::Op(OpStackElem::Op(Operator::Mul)),
-                '/' => return Elem::Op(OpStackElem::Op(Operator::Div)),
-                other => panic!("wrong element: {}", other),
+                '(' => return Ok(Elem::LP),
+                ')' => return Ok(Elem::RP),
+                '+' => return Ok(Elem::Op(Operator::Add)),
+                '-' => return Ok(Elem::Op(Operator::Sub)),
+                '*' => return Ok(Elem::Op(Operator::Mul)),
+                '/' => return Ok(Elem::Op(Operator::Div)),
+                _ => (),
             }
         }
+        
+        Err(())
     };
 
     // main
     let mut sym_stack: Vec<SymbolStackElem> = Vec::new(); // symbol stack which stores the operator and parenthesis
-    let mut num_stack: Vec<usize> = Vec::new();
+    let mut num_stack: Vec<i32> = Vec::new();
     
-    let calculater = | op: Operator | -> i32 {
+    let mut process = | num: Option<i32>, op: Option<Operator> | -> Option<i32> {
         // use num_stack
-        let (_, _, arity) = op.attri();
+        match (num, op) {
+            (None, None) => {
+                if num_stack.len() == 1 {
+                    num_stack.pop()
+                } else {
+                    None
+                }
+            },
+            (Some(value), None) => {
+                num_stack.push(value);
+                None
+            },
+            (None, Some(op)) => {
+                let (_, _, arity) = op.attri();
         
-        let num = if arity == Arity::Unary {
-            num_stack.pop().unwrap()
-        };
+                let num = if arity == Arity::Unary {
+                    num_stack.pop().unwrap()
+                } else {
+                    0
+                };
 
-        let (num_right, num_left) = if arity == Arity::Binary {
-            (num_stack.pop().unwrap(), num_stack.pop().unwrap())
-        };
+                let (num_right, num_left) = if arity == Arity::Binary {
+                    (num_stack.pop().unwrap(), num_stack.pop().unwrap())
+                } else {
+                    (0, 0)
+                };
         
-        match op {
-            Operator::Add => num_stack.push(num_left + num_right),
-            Operator::Sub => num_stack.push(num_left - num_right),
-            Operator::Mul => num_stack.push(num_left * num_right),
-            Operator::Div => num_stack.push(num_left / num_right),
-        } 
+                match op {
+                    Operator::Add => num_stack.push(num_left + num_right),
+                    Operator::Sub => num_stack.push(num_left - num_right),
+                    Operator::Mul => num_stack.push(num_left * num_right),
+                    Operator::Div => num_stack.push(num_left / num_right),
+                } 
+
+                None
+            },
+            _ => None
+        }
+
+       
     };
 
-    while let elem = parser() {
+    while let Ok(elem) = parser() {
         match elem {
-            Elem::Num(n) => { num_stack.push(n); },
+            Elem::Num(n) => { process(Some(n), None); },
             Elem::Op(op) => {
                 match sym_stack.last() {
-                    None | SymbolStackElem::Lp => { sym_stack.push(op); }, // thanks to Rust compiler
-                    Some(SymbolStackElem::Op(last_op)) => {
+                    None | Some(SymbolStackElem::LP) => { sym_stack.push(SymbolStackElem::Op(op)); }, // thanks to Rust compiler
+                    Some(SymbolStackElem::Op(_)) => {
+                        let last_op = if let SymbolStackElem::Op(last_op) = sym_stack.pop().unwrap() { last_op } else { Operator::Add }; // FIXME
                         let (prior_last, assoc, _) = last_op.attri();
                         let (prior_curr, _, _) = op.attri();
 
                         if (prior_last < prior_curr) | (prior_last == prior_curr && assoc == Associativity::Right) {
-                            sym_stack.push(op);
+                            sym_stack.push(SymbolStackElem::Op(op));
                         } else {
-                            let res = calculater(*last_op);
-                            num_stack.push(res);
-                            sym_stack.push(op);
+                            process(None, Some(last_op));
+                            sym_stack.push(SymbolStackElem::Op(op));
                         } 
                     },
                 } 
@@ -120,13 +148,17 @@ fn evaluate(expression: String) -> Result<i32, ()> {
                     match sym {
                         SymbolStackElem::LP => break,
                         SymbolStackElem::Op(op) => {
-                            let res = calculater(op);
-                            num_stack.push(res);
+                            process(None, Some(op));
                         },
                     }
                 }
             },
         }
+    }
+    
+    match process(None, None) {
+        None => Err(()),
+        Some(res) => Ok(res),
     }
 }
 
