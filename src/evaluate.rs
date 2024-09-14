@@ -3,6 +3,7 @@ mod operation {
     // 结合性：左结合和右结合
     // 元数：一元运算符和二元运算符
 
+    #[derive(Debug)]
     pub enum Operation {
         Add,
         Sub,
@@ -49,6 +50,7 @@ mod operation {
 
 use operation::*;
 
+#[derive(Debug)]
 enum Elem {
     Num(i32),
     Op(Operation),
@@ -56,6 +58,7 @@ enum Elem {
     RP, // right parenthesis 
 }
 
+#[derive(Debug)]
 enum SymbolStackElem {
     LP, // left parenthesis
     Op(Operation),
@@ -92,7 +95,7 @@ fn evaluate(expression: String) -> Result<i32, ()> {
                     if s_iter.peek().unwrap().is_numeric() {
                         let c = s_iter.next().unwrap();
                         num_str.push(c);
-                    } 
+                    } else { break; }
                 }
                 return Ok(Elem::Num(num_str.parse().unwrap()));
             }
@@ -149,24 +152,24 @@ fn evaluate(expression: String) -> Result<i32, ()> {
                     Operation::Div => num_stack.push(num_left / num_right),
                     _ => ()
                 } 
-
+                println!("num_stack: {:?}", num_stack);
                 ProcessRes::Ok
             },
         }
     };
 
     while let Ok(elem) = parser() {
+        // println!("elem: {:?}", elem);
         match elem {
             Elem::Num(n) => { process(ProcessMode::Push(n)); },
             Elem::Op(op) => {
                 match sym_stack.last() {
                     None | Some(SymbolStackElem::LP) => { sym_stack.push(SymbolStackElem::Op(op)); }, // thanks to Rust compiler
-                    Some(SymbolStackElem::Op(_)) => {
-                        let last_op = if let SymbolStackElem::Op(last_op) = sym_stack.pop().unwrap() { last_op } else { Operation::Add }; // FIXME
-
+                    Some(SymbolStackElem::Op(last_op)) => {
                         if (last_op.priority() < op.priority()) | (last_op.priority() == op.priority() && op.assoc() == Associativity::Right) {
                             sym_stack.push(SymbolStackElem::Op(op));
                         } else {
+                            let last_op = if let SymbolStackElem::Op(last_op) = sym_stack.pop().unwrap() { last_op } else { Operation::Add }; // FIXME
                             process(ProcessMode::Calculate(last_op));
                             sym_stack.push(SymbolStackElem::Op(op));
                         } 
@@ -189,6 +192,16 @@ fn evaluate(expression: String) -> Result<i32, ()> {
         }
     }
     
+    while let Some(sym) = sym_stack.pop() {
+        match sym {
+            SymbolStackElem::LP => return Err(()),
+            SymbolStackElem::Op(op) => {
+                println!("symbol stack: {:?}", sym_stack);
+                process(ProcessMode::Calculate(op));
+            }
+        } 
+    }
+
     match process(ProcessMode::Pop) {
         ProcessRes::Res(res) => Ok(res),
         ProcessRes::WrongExp => Err(()),
@@ -202,6 +215,6 @@ mod tests {
     
     #[test]
     fn eval() {
-        assert_eq!(evaluate("1+2*3+4*5+6".to_string()), Ok(71));
+        assert_eq!(evaluate("1+2*3+4*5+6".to_string()), Ok(33));
     }
 }
