@@ -1,59 +1,98 @@
-// 优先级
-// 结合性：左结合和右结合
-// 元数：一元运算符和二元运算符
-enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
+mod operation {
+    // 优先级
+    // 结合性：左结合和右结合
+    // 元数：一元运算符和二元运算符
 
-#[derive(PartialEq)]
-enum Associativity {
-    Left,
-    Right,
-}
+    pub enum Operation {
+        Add,
+        Sub,
+        Mul,
+        Div,
+        Neg,
+    }
 
-#[derive(PartialEq)]
-enum Arity {
-    Unary,
-    Binary,
-}
+    #[derive(PartialEq)]
+    pub enum Associativity {
+        Left,
+        Right,
+    }
 
-impl Operator {
-    fn attri(&self) -> (usize, Associativity, Arity) {
-        match self {
-            Operator::Add => (1, Associativity::Left, Arity::Binary),
-            Operator::Sub => (1, Associativity::Left, Arity::Binary),
-            Operator::Mul => (2, Associativity::Left, Arity::Binary),
-            Operator::Div => (2, Associativity::Left, Arity::Binary),
+    pub enum Arity {
+        Unary,
+        Binary,
+    }
+
+    impl Operation {
+        pub fn assoc(&self) -> Associativity {
+            match self {
+                Self::Add | Self::Sub | Self::Mul | Self::Div => Associativity::Left,
+                Self::Neg => Associativity::Right
+            }
+        }
+
+        pub fn arity(&self) -> Arity {
+            match self {
+                Self::Add | Self::Sub | Self::Mul | Self::Div => Arity::Binary,
+                Self::Neg => Arity::Unary
+            }
+        }
+
+        pub fn priority(&self) -> u8 {
+            match self {
+                Self::Add | Self::Sub => 1,
+                Self::Mul | Self::Div => 2,
+                Self::Neg => 3
+            }
         }
     }
 }
 
+use operation::*;
+
 enum Elem {
     Num(i32),
-    Op(Operator),
+    Op(Operation),
     LP, // left parenthesis
     RP, // right parenthesis 
 }
 
 enum SymbolStackElem {
     LP, // left parenthesis
-    Op(Operator),
+    Op(Operation),
+}
+
+enum ParseErr {
+    UnknownElem,
+    Empty,
+}
+
+enum ProcessMode {
+    Pop,
+    Push(i32),
+    Calculate(Operation),
+}
+
+enum ProcessRes {
+    Res(i32),
+    Ok,
+    WrongExp,   
 }
 
 fn evaluate(expression: String) -> Result<i32, ()> { 
+    let expression = expression.replace(" ", ""); 
     let mut s_iter = expression.chars().peekable();
 
-    let mut parser = || -> Result<Elem, ()> {
+    let mut parser = || -> Result<Elem, ParseErr> {
         if let Some(c) = s_iter.next() {
             let mut num_str = String::new();
             if c.is_numeric() {
                 num_str.push(c);
-                while s_iter.peek().unwrap().is_numeric() {
-                    let c = s_iter.next().unwrap();
-                    num_str.push(c);
+                
+                while s_iter.peek().is_some() {
+                    if s_iter.peek().unwrap().is_numeric() {
+                        let c = s_iter.next().unwrap();
+                        num_str.push(c);
+                    } 
                 }
                 return Ok(Elem::Num(num_str.parse().unwrap()));
             }
@@ -61,80 +100,74 @@ fn evaluate(expression: String) -> Result<i32, ()> {
             match c {
                 '(' => return Ok(Elem::LP),
                 ')' => return Ok(Elem::RP),
-                '+' => return Ok(Elem::Op(Operator::Add)),
-                '-' => return Ok(Elem::Op(Operator::Sub)),
-                '*' => return Ok(Elem::Op(Operator::Mul)),
-                '/' => return Ok(Elem::Op(Operator::Div)),
-                _ => (),
+                '+' => return Ok(Elem::Op(Operation::Add)),
+                '-' => return Ok(Elem::Op(Operation::Sub)),
+                '*' => return Ok(Elem::Op(Operation::Mul)),
+                '/' => return Ok(Elem::Op(Operation::Div)),
+                _   => return Err(ParseErr::UnknownElem),
             }
         }
         
-        Err(())
+        Err(ParseErr::Empty)
     };
 
     // main
     let mut sym_stack: Vec<SymbolStackElem> = Vec::new(); // symbol stack which stores the operator and parenthesis
     let mut num_stack: Vec<i32> = Vec::new();
     
-    let mut process = | num: Option<i32>, op: Option<Operator> | -> Option<i32> {
+    let mut process = | mode: ProcessMode | -> ProcessRes {
         // use num_stack
-        match (num, op) {
-            (None, None) => {
+        match mode {
+            ProcessMode::Pop => {
                 if num_stack.len() == 1 {
-                    num_stack.pop()
+                    ProcessRes::Res(num_stack.pop().unwrap())
                 } else {
-                    None
+                    ProcessRes::WrongExp
                 }
             },
-            (Some(value), None) => {
+            ProcessMode::Push(value) => {
                 num_stack.push(value);
-                None
+                ProcessRes::Ok
             },
-            (None, Some(op)) => {
-                let (_, _, arity) = op.attri();
-        
-                let num = if arity == Arity::Unary {
+            ProcessMode::Calculate(op) => {
+                let num = if let Arity::Unary = op.arity() {
                     num_stack.pop().unwrap()
                 } else {
                     0
                 };
 
-                let (num_right, num_left) = if arity == Arity::Binary {
+                let (num_right, num_left) = if let Arity::Binary = op.arity() {
                     (num_stack.pop().unwrap(), num_stack.pop().unwrap())
                 } else {
                     (0, 0)
                 };
         
                 match op {
-                    Operator::Add => num_stack.push(num_left + num_right),
-                    Operator::Sub => num_stack.push(num_left - num_right),
-                    Operator::Mul => num_stack.push(num_left * num_right),
-                    Operator::Div => num_stack.push(num_left / num_right),
+                    Operation::Add => num_stack.push(num_left + num_right),
+                    Operation::Sub => num_stack.push(num_left - num_right),
+                    Operation::Mul => num_stack.push(num_left * num_right),
+                    Operation::Div => num_stack.push(num_left / num_right),
+                    _ => ()
                 } 
 
-                None
+                ProcessRes::Ok
             },
-            _ => None
         }
-
-       
     };
 
     while let Ok(elem) = parser() {
         match elem {
-            Elem::Num(n) => { process(Some(n), None); },
+            Elem::Num(n) => { process(ProcessMode::Push(n)); },
             Elem::Op(op) => {
                 match sym_stack.last() {
                     None | Some(SymbolStackElem::LP) => { sym_stack.push(SymbolStackElem::Op(op)); }, // thanks to Rust compiler
                     Some(SymbolStackElem::Op(_)) => {
-                        let last_op = if let SymbolStackElem::Op(last_op) = sym_stack.pop().unwrap() { last_op } else { Operator::Add }; // FIXME
-                        let (prior_last, assoc, _) = last_op.attri();
-                        let (prior_curr, _, _) = op.attri();
+                        let last_op = if let SymbolStackElem::Op(last_op) = sym_stack.pop().unwrap() { last_op } else { Operation::Add }; // FIXME
 
-                        if (prior_last < prior_curr) | (prior_last == prior_curr && assoc == Associativity::Right) {
+                        if (last_op.priority() < op.priority()) | (last_op.priority() == op.priority() && op.assoc() == Associativity::Right) {
                             sym_stack.push(SymbolStackElem::Op(op));
                         } else {
-                            process(None, Some(last_op));
+                            process(ProcessMode::Calculate(last_op));
                             sym_stack.push(SymbolStackElem::Op(op));
                         } 
                     },
@@ -148,7 +181,7 @@ fn evaluate(expression: String) -> Result<i32, ()> {
                     match sym {
                         SymbolStackElem::LP => break,
                         SymbolStackElem::Op(op) => {
-                            process(None, Some(op));
+                            process(ProcessMode::Calculate(op));
                         },
                     }
                 }
@@ -156,9 +189,10 @@ fn evaluate(expression: String) -> Result<i32, ()> {
         }
     }
     
-    match process(None, None) {
-        None => Err(()),
-        Some(res) => Ok(res),
+    match process(ProcessMode::Pop) {
+        ProcessRes::Res(res) => Ok(res),
+        ProcessRes::WrongExp => Err(()),
+        _ => Err(())
     }
 }
 
@@ -168,6 +202,6 @@ mod tests {
     
     #[test]
     fn eval() {
-        assert_eq!(evaluate("1 + 2 * 3 + 4 * 5 + 6".to_string()), Ok(71));
+        assert_eq!(evaluate("1+2*3+4*5+6".to_string()), Ok(71));
     }
 }
