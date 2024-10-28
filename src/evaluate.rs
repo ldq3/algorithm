@@ -1,4 +1,5 @@
 mod operation {
+    #![allow(unused)]
     // 优先级
     // 结合性：左结合和右结合
     // 元数：一元运算符和二元运算符
@@ -24,6 +25,7 @@ mod operation {
     }
 
     impl Operation {
+        #[inline]
         pub fn assoc(&self) -> Associativity {
             match self {
                 Self::Add | Self::Sub | Self::Mul | Self::Div => Associativity::Left,
@@ -31,6 +33,7 @@ mod operation {
             }
         }
 
+        #[inline]
         pub fn arity(&self) -> Arity {
             match self {
                 Self::Add | Self::Sub | Self::Mul | Self::Div => Arity::Binary,
@@ -38,6 +41,7 @@ mod operation {
             }
         }
 
+        #[inline]
         pub fn priority(&self) -> u8 {
             match self {
                 Self::Add | Self::Sub => 1,
@@ -216,5 +220,7 @@ mod tests {
     #[test]
     fn eval() {
         assert_eq!(evaluate("1+2*3+4*5+6".to_string()), Ok(33));
+        assert_eq!(evaluate("1+ 2*3 +4*5+6".to_string()), Ok(33));
+        assert_eq!(evaluate("(1+ 2)*3 +4*5+6".to_string()), Ok(35));
     }
 }
