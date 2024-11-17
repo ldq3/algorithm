@@ -1,3 +1,9 @@
+/*!
+处理括号：右括号，符号栈出栈直到出现左括号
+
+任何时候，左结合单目运算符，如 ‘!’，在操作符栈中只可能存有一个，而且必定是栈顶
+*/
+
 mod operation {
     #![allow(unused)]
     // 优先级
@@ -118,7 +124,6 @@ fn evaluate(expression: String) -> Result<i32, ()> {
         Err(ParseErr::Empty)
     };
 
-    // main
     let mut sym_stack: Vec<SymbolStackElem> = Vec::new(); // symbol stack which stores the operator and parenthesis
     let mut num_stack: Vec<i32> = Vec::new();
     
